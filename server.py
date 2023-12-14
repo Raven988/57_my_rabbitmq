@@ -9,13 +9,12 @@ def callback(ch, method, properties, body):
 
     # Обрабатываем запрос: умножаем число на 2
     result = number * 2
+    print(f'Queue name: {properties.reply_to}')
     print(f'From ID: {client_id} received: {number} sent back: {result}.')
     time.sleep(random.randint(3, 9))
 
     # Отправляем ответ в уникальную очередь ответов для данного клиента
-    response_queue_name = f'response_queue_{client_id}'
-
-    ch.basic_publish(exchange='', routing_key=response_queue_name, body=str(result))
+    ch.basic_publish(exchange='', routing_key=properties.reply_to, body=str(result))
 
 
 # Устанавливаем соединение
