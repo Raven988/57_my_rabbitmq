@@ -1,32 +1,36 @@
-import pika
-import time
-import random
+import pika.exceptions
+import configparser
+
 
 def callback(ch, method, properties, body):
-    # Получаем данные из запроса
     request_data = body.decode('utf-8')
     client_id, number = map(int, request_data.split(','))
-
-    # Обрабатываем запрос: умножаем число на 2
     result = number * 2
     print(f'Queue name: {properties.reply_to}')
     print(f'From ID: {client_id} received: {number} sent back: {result}.')
-    time.sleep(random.randint(3, 9))
-
-    # Отправляем ответ в уникальную очередь ответов для данного клиента
     ch.basic_publish(exchange='', routing_key=properties.reply_to, body=str(result))
 
 
-# Устанавливаем соединение
-connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-channel = connection.channel()
+config = configparser.ConfigParser()
+if config.read('config1.ini'):
+    username = config.get('Authentication', 'username', fallback='guest')
+    password = config.get('Authentication', 'password', fallback='guest')
+    host = config.get('Authentication', 'host', fallback='localhost')
+    port = config.get('Authentication', 'port', fallback='5672')
+else:
+    print('Конфигурационный файл не обнаружен')
+    exit(0)
 
-channel.exchange_declare(exchange='direct_exchange')
-channel.queue_declare(queue='requests_queue')
-channel.queue_bind(exchange='direct_exchange', queue='requests_queue')
 
-# Устанавливаем callback-функцию для обработки запросов
-channel.basic_consume(queue='requests_queue', on_message_callback=callback, auto_ack=True)
-
-print('Ожидание запросов. Для выхода нажмите CTRL+C')
-channel.start_consuming()
+try:
+    credentials = pika.PlainCredentials(username=username, password=password)
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=host, port=port, credentials=credentials))
+    channel = connection.channel()
+    channel.queue_declare(queue='requests_queue')
+    channel.basic_consume(queue='requests_queue', on_message_callback=callback, auto_ack=True)
+    print('Ожидание запросов. Для выхода нажмите CTRL+C')
+    channel.start_consuming()
+except pika.exceptions.AMQPConnectionError:
+    print('Ошибка соединения')
+except KeyboardInterrupt:
+    print('выход')
