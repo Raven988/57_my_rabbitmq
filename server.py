@@ -12,7 +12,7 @@ def callback(ch, method, properties, body):
 
 
 config = configparser.ConfigParser()
-if config.read('config1.ini'):
+if config.read('config.ini'):
     username = config.get('Authentication', 'username', fallback='guest')
     password = config.get('Authentication', 'password', fallback='guest')
     host = config.get('Authentication', 'host', fallback='localhost')
