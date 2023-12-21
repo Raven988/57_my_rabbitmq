@@ -16,7 +16,7 @@ class Client:
 
     def connect(self):
         config = configparser.ConfigParser()
-        if config.read('config.ini'):
+        if config.read('conf.ini'):
             username = config.get('Authentication', 'username', fallback='guest')
             password = config.get('Authentication', 'password', fallback='guest')
             host = config.get('Authentication', 'host', fallback='localhost')
