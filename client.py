@@ -72,6 +72,8 @@ class Client:
 
     def send_request(self):
         number = input('Input number: ')
+        if not number:
+            number = 0
         request_data = f'{self.client_id},{number}'
         self.channel.basic_publish(exchange='',
                                    routing_key='requests_queue',
@@ -84,4 +86,5 @@ class Client:
         self.channel.stop_consuming()
 
 
-client1 = Client(1)
+if __name__ == '__main__':
+    client1 = Client(1)
