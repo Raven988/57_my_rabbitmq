@@ -31,10 +31,10 @@ logger.addHandler(console_handler)
 def callback(ch, method, properties, body):
     request_data = body.decode('utf-8')
     client_id, number = map(int, request_data.split(','))
-    result = number * 2
+    result = f'{number},{number * 2}'
     logger.debug(f'Имя очереди: {properties.reply_to}')
-    logger.info(f'Получено число {number} от клиента {client_id}. Отправлено {result}')
-    ch.basic_publish(exchange='', routing_key=properties.reply_to, body=str(result))
+    logger.info(f'Получено число {number} от клиента {client_id}. Отправлено {number * 2}')
+    ch.basic_publish(exchange='', routing_key=properties.reply_to, body=result)
 
 
 try:
