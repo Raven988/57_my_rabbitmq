@@ -1,3 +1,5 @@
+import threading
+
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PyQt5.QtCore import QPropertyAnimation, QRect, QParallelAnimationGroup, QThread
 # from PyQt5 import uic
@@ -7,20 +9,20 @@ from SenderThread import SenderThread
 
 import sys
 import configparser
+import threading
 import pika.exceptions
 
 
 class Window(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
+        print(threading.get_native_id())
         self.setupUi(self)
         # self.ui = uic.loadUi('untitled2.ui', self)
-        self.connection = None
-        self.channel = None
         self.queue_name = None
         self.client_id = 1
-        self.sender_obj = None
-        self.sender_thread = None
+        self.pika_obj = None
+        self.pika_thread = None
         try:
             self.load_conf()
         except FileNotFoundError:
@@ -45,66 +47,31 @@ class Window(QMainWindow, Ui_MainWindow):
             raise FileNotFoundError
 
     def connect_pika(self):
-        try:
-            credentials = pika.PlainCredentials(self.lineEdit_login.text(), self.lineEdit_password.text())
-            params = pika.ConnectionParameters(self.lineEdit_host.text(), self.lineEdit_port.text(),
-                                               credentials=credentials)
-            self.connection = pika.BlockingConnection(params)
-            self.channel = self.connection.channel()
-            self.channel.queue_declare(queue='requests_queue')
-            self.queue_name = self.channel.queue_declare(queue='', exclusive=True).method.queue
-            self.show_frame(self.frame_sender, self.frame_connect)
-            self.lineEdit_number.setText('0')
-            self.make_consuming_thread()
-        except pika.exceptions.AMQPConnectionError:
-            QMessageBox.critical(self, 'Error', 'Error! Connect failed', QMessageBox.Ok, QMessageBox.Ok)
-
-    def make_consuming_thread(self):
-        self.sender_obj = SenderThread(self.channel, self.queue_name)
-        self.sender_thread = QThread()
-        self.sender_obj.moveToThread(self.sender_thread)
-        self.sender_thread.started.connect(self.sender_obj.start)
-        self.sender_obj.any_signal.connect(self.set_info)
-        self.sender_thread.start()
+        self.pika_thread = QThread()
+        self.pika_obj = SenderThread(self.lineEdit_login.text(),
+                                     self.lineEdit_password.text(),
+                                     self.lineEdit_host.text(),
+                                     self.lineEdit_port.text())
+        self.pika_obj.moveToThread(self.pika_thread)
+        self.pika_obj.any_signal.connect(self.set_info)
+        self.pika_thread.started.connect(self.pika_obj.start)
+        self.pika_thread.start()
+        # self.pika_thread.wait()
+        self.lineEdit_number.setText('0')
+        self.show_frame(self.frame_sender, self.frame_connect)
 
     def send_msg(self):
-        try:
-            number = self.lineEdit_number.text()
-            request = f'{self.client_id},{number}\n'
-            self.channel.basic_publish(exchange='',
-                                       routing_key='requests_queue',
-                                       body=request,
-                                       properties=pika.BasicProperties(reply_to=self.queue_name))
-            self.textBrowser.append(f'Отправлено число {number}. Ждем ответ от сервера...')
-        except Exception as e:
-            print(f'{e}\nНеобработанная ошибка в send_msg')
+        number = self.lineEdit_number.text()
+        request = f'{self.client_id},{number}\n'
+        self.textBrowser.append(f'Отправлено число {number}. Ждем ответ от сервера...')
+        self.pika_obj.signal_from_main.emit(request)
 
     def disconnect_pika(self):
         self.show_frame(self.frame_connect, self.frame_sender)
         self.textBrowser.clear()
-        try:
-            self.connection.close()
-        except pika.exceptions.StreamLostError as e:
-            print(f'{e}\nЗадолбала')
-        finally:
-            self.sender_thread.terminate()
-            self.sender_obj = None
-            self.sender_thread = None
-        # try:
-        #     self.connection.close()
-        #     self.textBrowser.clear()
-        #     self.show_frame(self.frame_connect, self.frame_sender)
-        #     if self.sender_thread:
-        #         self.sender_thread.terminate()
-        #         self.sender_obj = None
-        #         self.sender_thread = None
-        # except pika.exceptions.StreamLostError as e:
-        #     print(f'{e}\nfrom client_ui')
-        #     self.show_frame(self.frame_connect, self.frame_sender)
-        #     if self.sender_thread:
-        #         self.sender_thread.terminate()
-        #         self.sender_obj = None
-        #         self.sender_thread = None
+        self.pika_obj.close.emit()
+        self.pika_thread.terminate()
+
 
     def show_frame(self, frame1, frame2):
         main_window_geometry = self.geometry()
@@ -128,7 +95,7 @@ class Window(QMainWindow, Ui_MainWindow):
                                 f"получен ответ: {result.decode('utf-8').split(',')[1]}")
 
     def show_log(self):
-        pass
+        self.pika_obj.signal_3.emit()
 
     def closeEvent(self, a0):
         print("Closed app")
