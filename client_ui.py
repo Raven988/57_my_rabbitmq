@@ -1,7 +1,7 @@
 import threading
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
-from PyQt5.QtCore import QPropertyAnimation, QRect, QParallelAnimationGroup, QThread
+from PyQt5.QtCore import QPropertyAnimation, QRect, QParallelAnimationGroup, QThread, pyqtSlot
 # from PyQt5 import uic
 
 from win_ui import Ui_MainWindow
@@ -11,12 +11,13 @@ import sys
 import configparser
 import threading
 import pika.exceptions
+import os
 
 
 class Window(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
-        print(threading.get_native_id())
+        print(f'Main Thread: {threading.get_native_id()}')
         self.setupUi(self)
         # self.ui = uic.loadUi('untitled2.ui', self)
         self.queue_name = None
@@ -53,25 +54,39 @@ class Window(QMainWindow, Ui_MainWindow):
                                      self.lineEdit_host.text(),
                                      self.lineEdit_port.text())
         self.pika_obj.moveToThread(self.pika_thread)
-        self.pika_obj.any_signal.connect(self.set_info)
-        self.pika_thread.started.connect(self.pika_obj.start)
+        self.pika_obj.signal_response.connect(self.set_info)
+        self.pika_obj.connection_close.connect(self.connection_close)
+        self.pika_thread.started.connect(self.pika_obj.start) # noqa
         self.pika_thread.start()
-        # self.pika_thread.wait()
-        self.lineEdit_number.setText('0')
-        self.show_frame(self.frame_sender, self.frame_connect)
+
+    def connection_close(self, result):
+        if not result:
+            self.lineEdit_number.setText('0')
+            self.show_frame(self.frame_sender, self.frame_connect)
+        else:
+            QMessageBox.critical(self, 'Error', 'ConnectionError!', QMessageBox.Ok, QMessageBox.Ok)
+            self.pika_thread.quit()
 
     def send_msg(self):
         number = self.lineEdit_number.text()
         request = f'{self.client_id},{number}\n'
         self.textBrowser.append(f'Отправлено число {number}. Ждем ответ от сервера...')
-        self.pika_obj.signal_from_main.emit(request)
+        self.pika_obj.request_from_main.emit(request)
 
     def disconnect_pika(self):
+        # # Закрываем текущий цикл обработки событий
+        # qApp = QApplication.instance()
+        # qApp.quit()
+        # # Перезапускаем программу
+        # python = sys.executable
+        # os.execl(python, python, *sys.argv)
         self.show_frame(self.frame_connect, self.frame_sender)
         self.textBrowser.clear()
-        self.pika_obj.close.emit()
-        self.pika_thread.terminate()
-
+        if self.pika_thread:
+            self.pika_obj.close_conn.emit()
+            self.pika_thread.quit()
+            # self.pika_thread = None
+            print('disconnect_pika')
 
     def show_frame(self, frame1, frame2):
         main_window_geometry = self.geometry()
@@ -95,12 +110,14 @@ class Window(QMainWindow, Ui_MainWindow):
                                 f"получен ответ: {result.decode('utf-8').split(',')[1]}")
 
     def show_log(self):
-        self.pika_obj.signal_3.emit()
+        pass
 
     def closeEvent(self, a0):
         print("Closed app")
-        if self.sender_thread:
-            self.sender_thread.terminate()
+        self.disconnect_pika()
+        if self.pika_thread:
+            self.pika_thread.quit()
+            print("thread stopped")
         a0.accept()
 
 
