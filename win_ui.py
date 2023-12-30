@@ -92,11 +92,8 @@ class Ui_MainWindow(object):
         self.checkBox.setLayoutDirection(QtCore.Qt.LeftToRight)
         self.checkBox.setStyleSheet("QCheckBox::indicator\n"
 "{\n"
-"border : 1px solid black;\n"
-"    background-color: rgb(255, 0, 0);\n"
-"width : 10px;\n"
-"height : 10px;\n"
-"border-radius : 5px;\n"
+"background-color: rgb(255, 0, 0);\n"
+"border-radius :6px;\n"
 "}")
         self.checkBox.setCheckable(False)
         self.checkBox.setChecked(False)

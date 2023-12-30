@@ -35,20 +35,24 @@ def callback(ch, method, properties, body):
     result = f'{number},{number * 2}'
     logger.debug(f'Имя очереди: {properties.reply_to}')
     logger.info(f'Получено число {number} от клиента {client_id}. Отправлено {number * 2}')
-    time.sleep(3)
+    time.sleep(6)
     ch.basic_publish(exchange='', routing_key=properties.reply_to, body=result)
 
 
+
+logger.debug(f'Подключение к серверу...\nUsername -> {username}\nHost -> {host}:{port}')
+credentials = pika.PlainCredentials(username=username, password=password)
+connection = pika.BlockingConnection(pika.ConnectionParameters(host=host, port=port, credentials=credentials))
+channel = connection.channel()
 try:
-    logger.debug(f'Подключение к серверу...\nUsername -> {username}\nHost -> {host}:{port}')
-    credentials = pika.PlainCredentials(username=username, password=password)
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host=host, port=port, credentials=credentials))
-    channel = connection.channel()
+    channel.queue_declare(queue='server_online')
     channel.queue_declare(queue='requests_queue')
     channel.basic_consume(queue='requests_queue', on_message_callback=callback, auto_ack=True)
     logger.info('Ожидание запросов. Для выхода нажмите CTRL+C')
     channel.start_consuming()
 except pika.exceptions.AMQPConnectionError:
+    channel.queue_delete(queue='server_online')
     logger.error('Ошибка соединения')
 except KeyboardInterrupt:
+    channel.queue_delete(queue='server_online')
     logger.info('Exit')
